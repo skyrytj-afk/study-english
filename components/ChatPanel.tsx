@@ -30,9 +30,25 @@ export default function ChatPanel({ topic }: { topic: Topic }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ topic: TOPIC_LABEL[topic], messages: next }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "요청 실패");
-      setMessages([...next, { role: "assistant", content: data.reply }]);
+
+      // 에러는 JSON, 성공은 텍스트 스트림
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "요청 실패");
+      }
+      if (!res.body) throw new Error("응답 본문이 없습니다.");
+
+      // 빈 assistant 메시지를 추가하고 토큰을 이어붙인다.
+      setMessages([...next, { role: "assistant", content: "" }]);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let acc = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        acc += decoder.decode(value, { stream: true });
+        setMessages([...next, { role: "assistant", content: acc }]);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "오류가 발생했습니다.");
     } finally {

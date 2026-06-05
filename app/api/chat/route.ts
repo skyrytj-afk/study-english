@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import type Anthropic from "@anthropic-ai/sdk";
 import { getAnthropic, getModel } from "@/lib/anthropic";
 import { buildChatSystem } from "@/lib/prompts";
 import type { ChatMessage } from "@/lib/types";
@@ -16,37 +15,53 @@ export async function POST(req: Request) {
 
   const topic = (body.topic ?? "daily life").toString();
   const history = Array.isArray(body.messages) ? body.messages : [];
-  if (history.length === 0) {
-    return NextResponse.json({ error: "메시지가 비어 있습니다." }, { status: 400 });
-  }
-
-  // 역할/내용 정제 후 SDK 형식으로 변환.
   const messages = history
     .filter((m) => (m.role === "user" || m.role === "assistant") && m.content?.trim())
     .map((m) => ({ role: m.role, content: m.content }));
 
   if (messages.length === 0 || messages[0].role !== "user") {
-    return NextResponse.json({ error: "대화는 사용자 메시지로 시작해야 합니다." }, { status: 400 });
+    return NextResponse.json(
+      { error: "대화는 사용자 메시지로 시작해야 합니다." },
+      { status: 400 }
+    );
   }
 
+  let client;
   try {
-    const client = getAnthropic();
-    const response = await client.messages.create({
-      model: getModel(),
-      max_tokens: 600,
-      system: buildChatSystem(topic),
-      messages,
-    });
-
-    const reply = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("")
-      .trim();
-
-    return NextResponse.json({ reply });
+    client = getAnthropic();
   } catch (err) {
     const message = err instanceof Error ? err.message : "알 수 없는 오류";
     return NextResponse.json({ error: message }, { status: 500 });
   }
+
+  // 토큰을 실시간으로 흘려보내는 텍스트 스트림 응답.
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        const ms = client.messages.stream({
+          model: getModel(),
+          max_tokens: 600,
+          system: buildChatSystem(topic),
+          messages,
+        });
+        ms.on("text", (delta: string) => {
+          controller.enqueue(encoder.encode(delta));
+        });
+        await ms.finalMessage();
+        controller.close();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "스트리밍 오류";
+        controller.enqueue(encoder.encode(`\n[오류] ${message}`));
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+    },
+  });
 }

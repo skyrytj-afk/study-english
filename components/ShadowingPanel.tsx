@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import type { Lesson } from "@/lib/types";
 import type { useLessonPlayer } from "@/lib/useLessonPlayer";
 import { useRecorder } from "@/lib/useRecorder";
+import { useSpeechRecognition } from "@/lib/useSpeechRecognition";
+import { scoreLabel, scorePronunciation, type PronunciationScore } from "@/lib/textScore";
 import Waveform from "./Waveform";
 
 type Player = ReturnType<typeof useLessonPlayer>;
@@ -17,11 +19,15 @@ export default function ShadowingPanel({
 }) {
   const [index, setIndex] = useState(0);
   const recorder = useRecorder();
+  const stt = useSpeechRecognition();
+  const [score, setScore] = useState<PronunciationScore | null>(null);
   const seg = lesson.segments[index];
 
-  // 문장을 바꾸면 이전 녹음은 초기화
+  // 문장을 바꾸면 이전 녹음·점수 초기화
   useEffect(() => {
     recorder.reset();
+    setScore(null);
+    stt.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index]);
 
@@ -30,10 +36,20 @@ export default function ShadowingPanel({
     setIndex(next);
   };
 
+  const toggleScore = () => {
+    if (stt.listening) {
+      stt.stop();
+      setScore(scorePronunciation(seg.en, stt.transcript));
+    } else {
+      setScore(null);
+      stt.start();
+    }
+  };
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-slate-500">
-        한 문장씩 따라 말하기. 원음을 듣고, 녹음한 뒤 나란히 비교해 보세요.
+        한 문장씩 따라 말하기. 원음을 듣고, 녹음하거나 발음 평가로 연습해 보세요.
       </p>
 
       {/* 문장 네비게이션 */}
@@ -95,9 +111,7 @@ export default function ShadowingPanel({
         </div>
       </div>
 
-      {recorder.error && (
-        <p className="text-sm text-rose-500">{recorder.error}</p>
-      )}
+      {recorder.error && <p className="text-sm text-rose-500">{recorder.error}</p>}
 
       {/* 비교 */}
       {recorder.blobUrl && (
@@ -114,12 +128,74 @@ export default function ShadowingPanel({
             <audio src={recorder.blobUrl} controls className="h-10 flex-1" />
           </div>
           <Waveform blob={recorder.blob} color="#3479f6" />
-          <button
-            onClick={recorder.reset}
-            className="text-xs text-slate-400 underline"
-          >
+          <button onClick={recorder.reset} className="text-xs text-slate-400 underline">
             다시 녹음
           </button>
+        </div>
+      )}
+
+      {/* 발음 평가 */}
+      {stt.supported && (
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold">발음 평가</p>
+            <button
+              onClick={toggleScore}
+              className={`rounded-lg px-3 py-1.5 text-sm text-white ${
+                stt.listening ? "animate-pulse bg-rose-600" : "bg-emerald-600"
+              }`}
+            >
+              {stt.listening ? "■ 멈추고 채점" : "🎤 문장 말하기"}
+            </button>
+          </div>
+
+          {stt.listening && (
+            <p className="text-sm text-slate-500">
+              듣는 중… 위 문장을 또박또박 말해보세요: {stt.transcript || "…"}
+            </p>
+          )}
+
+          {score && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`text-3xl font-bold ${
+                    score.score >= 70
+                      ? "text-emerald-600"
+                      : score.score >= 50
+                        ? "text-amber-500"
+                        : "text-rose-500"
+                  }`}
+                >
+                  {score.score}점
+                </div>
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                  {scoreLabel(score.score)}
+                  <br />
+                  <span className="text-xs text-slate-400">
+                    {score.matched}/{score.total} 단어 인식
+                  </span>
+                </p>
+              </div>
+              {score.missed.length > 0 && (
+                <p className="text-sm">
+                  <span className="text-slate-500">놓친 단어: </span>
+                  {score.missed.map((w, i) => (
+                    <span
+                      key={i}
+                      className="mr-1 inline-block rounded bg-rose-100 px-1.5 py-0.5 text-rose-600 dark:bg-rose-900/30 dark:text-rose-300"
+                    >
+                      {w}
+                    </span>
+                  ))}
+                </p>
+              )}
+            </div>
+          )}
+          <p className="text-xs text-slate-400">
+            ※ 브라우저 음성 인식 기반이라 환경에 따라 정확도가 달라질 수 있어요. 점수보다
+            ‘또박또박 말하기’ 연습이 목적이에요.
+          </p>
         </div>
       )}
     </div>

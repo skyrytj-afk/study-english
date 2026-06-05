@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import type { Lesson } from "@/lib/types";
 import type { useLessonPlayer } from "@/lib/useLessonPlayer";
+import { lookupWord, type WordMeaning } from "@/lib/wordLookup";
 
 type Player = ReturnType<typeof useLessonPlayer>;
 
@@ -34,12 +36,33 @@ export default function ListeningPanel({
 }: Props) {
   const { currentIndex, status, repeatMode, abStart, abEnd } = player;
 
+  // 단어 뜻 팝업 상태
+  const [word, setWord] = useState<string | null>(null);
+  const [meaning, setMeaning] = useState<WordMeaning | null>(null);
+  const [wordLoading, setWordLoading] = useState(false);
+  const [wordError, setWordError] = useState<string | null>(null);
+
+  const onWord = async (raw: string, sentence: string) => {
+    const clean = raw.replace(/[^A-Za-z0-9']/g, "");
+    if (!clean) return;
+    setWord(clean);
+    setMeaning(null);
+    setWordError(null);
+    setWordLoading(true);
+    try {
+      setMeaning(await lookupWord(clean, sentence));
+    } catch (e) {
+      setWordError(e instanceof Error ? e.message : "조회 실패");
+    } finally {
+      setWordLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
-      {/* 권장 흐름 안내 */}
       <div className="rounded-xl bg-brand-50 p-3 text-sm text-brand-800 dark:bg-brand-900/30 dark:text-brand-200">
         <span className="font-semibold">권장 흐름</span> · ① 자막 끄고 듣기 → ② 영어
-        자막으로 확인 → ③ 한국어로 의미 확인
+        자막으로 확인 → ③ 한국어로 의미 확인 · <span className="opacity-80">단어를 탭하면 뜻이 나와요</span>
       </div>
 
       {player.isTts && (
@@ -58,30 +81,53 @@ export default function ListeningPanel({
       <div className="space-y-2">
         {lesson.segments.map((seg, i) => {
           const active = i === currentIndex;
-          const inAb =
-            abStart != null && abEnd != null && i >= abStart && i <= abEnd;
+          const inAb = abStart != null && abEnd != null && i >= abStart && i <= abEnd;
           return (
-            <button
+            <div
               key={seg.id}
-              onClick={() => player.play(i)}
-              className={`block w-full rounded-xl border p-3 text-left transition ${
+              className={`flex gap-2 rounded-xl border p-3 transition ${
                 active
                   ? "border-brand-400 bg-brand-50 dark:border-brand-500 dark:bg-brand-900/30"
-                  : "border-slate-200 bg-white hover:border-brand-300 dark:border-slate-700 dark:bg-slate-900"
+                  : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
               } ${inAb ? "ring-1 ring-brand-300" : ""}`}
             >
-              {showEn && <p className="text-base leading-relaxed">{seg.en}</p>}
-              {showKo && (
-                <p className="mt-1 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
-                  {seg.ko}
-                </p>
-              )}
-              {!showEn && !showKo && (
-                <p className="text-center text-sm italic text-slate-400">
-                  · · · 자막 꺼짐 — 소리에 집중하세요 · · ·
-                </p>
-              )}
-            </button>
+              <button
+                onClick={() => player.play(i)}
+                aria-label="이 문장부터 재생"
+                className="mt-0.5 h-7 w-7 shrink-0 rounded-full bg-brand-600 text-xs text-white"
+              >
+                ▶
+              </button>
+              <div className="min-w-0 flex-1">
+                {showEn && (
+                  <p className="text-base leading-relaxed">
+                    {seg.en.split(/(\s+)/).map((tok, j) =>
+                      /\S/.test(tok) ? (
+                        <button
+                          key={j}
+                          onClick={() => onWord(tok, seg.en)}
+                          className="rounded hover:bg-brand-100 hover:underline dark:hover:bg-brand-800/40"
+                        >
+                          {tok}
+                        </button>
+                      ) : (
+                        <span key={j}>{tok}</span>
+                      )
+                    )}
+                  </p>
+                )}
+                {showKo && (
+                  <p className="mt-1 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
+                    {seg.ko}
+                  </p>
+                )}
+                {!showEn && !showKo && (
+                  <p className="text-center text-sm italic text-slate-400">
+                    · · · 자막 꺼짐 — 소리에 집중하세요 · · ·
+                  </p>
+                )}
+              </div>
+            </div>
           );
         })}
       </div>
@@ -189,6 +235,34 @@ export default function ListeningPanel({
           </div>
         )}
       </div>
+
+      {/* 단어 뜻 팝업 */}
+      {word && (
+        <div className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-2xl p-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+            <div className="flex items-center justify-between">
+              <span className="text-lg font-bold">{word}</span>
+              <button
+                onClick={() => setWord(null)}
+                className="text-sm text-slate-400"
+                aria-label="닫기"
+              >
+                ✕
+              </button>
+            </div>
+            {wordLoading && <p className="mt-2 text-sm text-slate-400">뜻 찾는 중…</p>}
+            {wordError && <p className="mt-2 text-sm text-rose-500">{wordError}</p>}
+            {meaning && (
+              <div className="mt-2 space-y-1">
+                <p className="text-sm">{meaning.meaning}</p>
+                {meaning.example && (
+                  <p className="text-sm italic text-slate-500">예: {meaning.example}</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
