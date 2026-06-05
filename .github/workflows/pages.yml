@@ -1,0 +1,56 @@
+name: Deploy free static version to GitHub Pages
+
+on:
+  push:
+    branches:
+      - claude/english-app-narrated-reading-kmKRI
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # 정적 배포에는 서버(API 라우트)가 없으므로 빌드 전에 제거한다.
+      # (AI 기능은 NEXT_PUBLIC_AI_ENABLED=false 로 UI에서 비활성화)
+      - name: Remove server API routes for static export
+        run: rm -rf app/api
+
+      - name: Build static site
+        run: npm run build
+        env:
+          STATIC_EXPORT: "true"
+          NEXT_PUBLIC_AI_ENABLED: "false"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

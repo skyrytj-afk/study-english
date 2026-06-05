@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Feedback, Lesson } from "@/lib/types";
 import { useSpeechRecognition } from "@/lib/useSpeechRecognition";
+import { AI_ENABLED } from "@/lib/config";
 
 export default function RetellPanel({ lesson }: { lesson: Lesson }) {
   const stt = useSpeechRecognition();
@@ -58,6 +59,13 @@ export default function RetellPanel({ lesson }: { lesson: Lesson }) {
         괜찮아요 — AI가 격려와 함께 도와줍니다.
       </p>
 
+      {!AI_ENABLED && (
+        <p className="rounded-lg bg-amber-50 p-2 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+          이 무료 버전에서는 AI 피드백이 비활성화돼 있어요. 말하기·쓰기 연습은 그대로
+          할 수 있습니다. (AI 피드백은 서버 배포 + API 키 필요)
+        </p>
+      )}
+
       <div className="space-y-2">
         <textarea
           value={displayText}
@@ -78,13 +86,15 @@ export default function RetellPanel({ lesson }: { lesson: Lesson }) {
               {stt.listening ? "■ 말하기 중지" : "🎤 말하기"}
             </button>
           )}
-          <button
-            onClick={submit}
-            disabled={loading}
-            className="rounded-lg bg-brand-600 px-4 py-2 font-semibold text-white disabled:opacity-50"
-          >
-            {loading ? "피드백 받는 중…" : "AI 피드백 받기"}
-          </button>
+          {AI_ENABLED && (
+            <button
+              onClick={submit}
+              disabled={loading}
+              className="rounded-lg bg-brand-600 px-4 py-2 font-semibold text-white disabled:opacity-50"
+            >
+              {loading ? "피드백 받는 중…" : "AI 피드백 받기"}
+            </button>
+          )}
           {(text || stt.transcript) && (
             <button
               onClick={() => {

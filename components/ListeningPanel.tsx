@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Lesson } from "@/lib/types";
 import type { useLessonPlayer } from "@/lib/useLessonPlayer";
 import { lookupWord, type WordMeaning } from "@/lib/wordLookup";
+import { AI_ENABLED } from "@/lib/config";
 
 type Player = ReturnType<typeof useLessonPlayer>;
 
@@ -62,7 +63,8 @@ export default function ListeningPanel({
     <div className="space-y-4">
       <div className="rounded-xl bg-brand-50 p-3 text-sm text-brand-800 dark:bg-brand-900/30 dark:text-brand-200">
         <span className="font-semibold">권장 흐름</span> · ① 자막 끄고 듣기 → ② 영어
-        자막으로 확인 → ③ 한국어로 의미 확인 · <span className="opacity-80">단어를 탭하면 뜻이 나와요</span>
+        자막으로 확인 → ③ 한국어로 의미 확인
+        {AI_ENABLED && <span className="opacity-80"> · 단어를 탭하면 뜻이 나와요</span>}
       </div>
 
       {player.isTts && (
@@ -99,23 +101,26 @@ export default function ListeningPanel({
                 ▶
               </button>
               <div className="min-w-0 flex-1">
-                {showEn && (
-                  <p className="text-base leading-relaxed">
-                    {seg.en.split(/(\s+)/).map((tok, j) =>
-                      /\S/.test(tok) ? (
-                        <button
-                          key={j}
-                          onClick={() => onWord(tok, seg.en)}
-                          className="rounded hover:bg-brand-100 hover:underline dark:hover:bg-brand-800/40"
-                        >
-                          {tok}
-                        </button>
-                      ) : (
-                        <span key={j}>{tok}</span>
-                      )
-                    )}
-                  </p>
-                )}
+                {showEn &&
+                  (AI_ENABLED ? (
+                    <p className="text-base leading-relaxed">
+                      {seg.en.split(/(\s+)/).map((tok, j) =>
+                        /\S/.test(tok) ? (
+                          <button
+                            key={j}
+                            onClick={() => onWord(tok, seg.en)}
+                            className="rounded hover:bg-brand-100 hover:underline dark:hover:bg-brand-800/40"
+                          >
+                            {tok}
+                          </button>
+                        ) : (
+                          <span key={j}>{tok}</span>
+                        )
+                      )}
+                    </p>
+                  ) : (
+                    <p className="text-base leading-relaxed">{seg.en}</p>
+                  ))}
                 {showKo && (
                   <p className="mt-1 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
                     {seg.ko}

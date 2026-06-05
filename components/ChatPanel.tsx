@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ChatMessage, Topic } from "@/lib/types";
+import { AI_ENABLED } from "@/lib/config";
 
 const TOPIC_LABEL: Record<Topic, string> = {
   daily: "daily life",
@@ -18,7 +19,7 @@ export default function ChatPanel({ topic }: { topic: Topic }) {
 
   const send = async () => {
     const content = input.trim();
-    if (!content || loading) return;
+    if (!content || loading || !AI_ENABLED) return;
     const next: ChatMessage[] = [...messages, { role: "user", content }];
     setMessages(next);
     setInput("");
@@ -63,6 +64,12 @@ export default function ChatPanel({ topic }: { topic: Topic }) {
         영어 대화를 나눠 보세요. 짧고 쉬운 문장으로 대답해도 괜찮아요.
       </p>
 
+      {!AI_ENABLED && (
+        <p className="rounded-lg bg-amber-50 p-2 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+          이 무료 버전에서는 AI 대화가 비활성화돼 있어요. (서버 배포 + API 키 필요)
+        </p>
+      )}
+
       <div className="min-h-[120px] space-y-2 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
         {messages.length === 0 && (
           <p className="text-sm text-slate-400">
@@ -91,12 +98,13 @@ export default function ChatPanel({ topic }: { topic: Topic }) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
-          placeholder="영어로 입력…"
-          className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 outline-none focus:border-brand-400 dark:border-slate-600 dark:bg-slate-900"
+          placeholder={AI_ENABLED ? "영어로 입력…" : "무료 버전에서는 비활성화"}
+          disabled={!AI_ENABLED}
+          className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 outline-none focus:border-brand-400 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900"
         />
         <button
           onClick={send}
-          disabled={loading}
+          disabled={loading || !AI_ENABLED}
           className="rounded-lg bg-brand-600 px-4 py-2 font-semibold text-white disabled:opacity-50"
         >
           보내기
